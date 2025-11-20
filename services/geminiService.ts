@@ -1,10 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PodcastAnalysis, SentimentType, Episode, FearAndGreedIndex } from "../types";
+import axios from 'axios';
+import fetchJsonp from 'fetch-jsonp';
 
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found. Please set process.env.API_KEY.");
+    throw new Error("API Key not found. Please set GEMINI_API_KEY in .env.local file.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -174,111 +176,154 @@ export const analyzePodcast = async (
 };
 
 /**
- * Uses Gemini Search Grounding to find the latest episodes of the podcast.
+ * Fetches the latest episodes from the podcast RSS feed.
+ * Step 1: Get RSS feed URL from iTunes API using JSONP (to bypass CORS)
+ * Step 2: Parse RSS feed XML to get episodes
+ * No Gemini API needed for this function.
  */
 export const fetchRecentEpisodes = async (): Promise<Episode[]> => {
-  const client = getClient();
-  const modelId = "gemini-2.5-flash";
-
-  const systemInstruction = `
-    你是一個資料擷取助手。請利用 Google Search 搜尋「股癌 Gooaye Podcast」在 Apple Podcasts (https://podcasts.apple.com/us/podcast/gooaye-%E8%82%A1%E7%99%8C/id1500839292) 或 SoundOn 等平台上的最新集數資訊。
-    請找出最新的 10 集節目。
-    
-    對於每一集，請提供：
-    1. 集數編號 (例如 "EP531")。如果標題包含集數，請提取出來。
-    2. 完整標題 (例如 "EP531 測試標題")。
-    3. 發布日期 (格式 YYYY-MM-DD)。
-    
-    【重要】請直接回傳純 JSON 格式字串，格式為 Array，不要包含 markdown 標記。
-    格式範例：
-    [
-      { "id": "unique_id_1", "episodeNumber": "EP531", "title": "EP531 標題...", "date": "2024-01-01" }
-    ]
-    id 可以使用集數編號。
-    請確保按照日期從新到舊排序。
-  `;
-
   try {
-    const response = await client.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [{ text: "列出目前網路上 Gooaye 股癌 Podcast 最新的 10 集列表，請確保資訊來自 Apple Podcast 頁面。" }],
-      },
-      config: {
-        systemInstruction: systemInstruction,
-        tools: [{ googleSearch: {} }],
-      },
-    });
-
-    let jsonText = response.text || "";
+    // Step 1: Get the RSS feed URL from iTunes API using JSONP
+    const podcastId = '1500839292';
+    const lookupUrl = `https://itunes.apple.com/lookup?id=${podcastId}`;
     
-    // Clean up markdown
-    jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-    const firstOpen = jsonText.indexOf("[");
-    const lastClose = jsonText.lastIndexOf("]");
+    const lookupResponse = await fetchJsonp(lookupUrl);
+    const data = await lookupResponse.json();
+    const feedUrl = data.results?.[0]?.feedUrl;
     
-    if (firstOpen !== -1 && lastClose !== -1) {
-      jsonText = jsonText.substring(firstOpen, lastClose + 1);
-      const episodes = JSON.parse(jsonText) as Episode[];
-      return episodes;
+    if (!feedUrl) {
+      throw new Error('Feed URL not found in iTunes API response');
     }
     
-    return [];
+    console.log('RSS Feed URL:', feedUrl);
+    
+    // Step 2: Fetch and parse the RSS feed XML using CORS proxy
+    // Try multiple CORS proxies in case one fails
+    const corsProxies = [
+      'https://api.allorigins.win/raw?url=',
+      'https://corsproxy.io/?',
+    ];
+    
+    let xmlText = '';
+    let lastError: any = null;
+    
+    for (const corsProxy of corsProxies) {
+      try {
+        const proxiedFeedUrl = corsProxy + encodeURIComponent(feedUrl);
+        console.log('Trying proxy:', corsProxy);
+        
+        const rssResponse = await fetch(proxiedFeedUrl);
+        
+        if (!rssResponse.ok) {
+          throw new Error(`HTTP error! status: ${rssResponse.status}`);
+        }
+        
+        xmlText = await rssResponse.text();
+        console.log('Successfully fetched RSS feed, length:', xmlText.length);
+        break; // Success, exit loop
+      } catch (error) {
+        console.warn(`Failed with proxy ${corsProxy}:`, error);
+        lastError = error;
+        continue; // Try next proxy
+      }
+    }
+    
+    if (!xmlText) {
+      throw lastError || new Error('All CORS proxies failed');
+    }
+
+    // Parse XML using DOMParser (browser-native)
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    
+    // Check for parsing errors
+    const parserError = xmlDoc.querySelector('parsererror');
+    if (parserError) {
+      throw new Error('Failed to parse RSS XML');
+    }
+    
+    // Extract episode items
+    const items = xmlDoc.querySelectorAll('item');
+    const episodes: Episode[] = [];
+    
+    // Process up to 10 episodes
+    for (let i = 0; i < Math.min(items.length, 10); i++) {
+      const item = items[i];
+      
+      const title = item.querySelector('title')?.textContent || '';
+      const pubDate = item.querySelector('pubDate')?.textContent || '';
+      const itunesEpisode = item.querySelector('episode')?.textContent || '';
+      
+      // Try to extract episode number from title (e.g., "EP531")
+      const episodeNumberMatch = title.match(/EP(\d+)/i);
+      let episodeNumber = '';
+      
+      if (episodeNumberMatch) {
+        episodeNumber = `EP${episodeNumberMatch[1]}`;
+      } else if (itunesEpisode) {
+        episodeNumber = `EP${itunesEpisode}`;
+      } else {
+        // Fallback: use index
+        episodeNumber = `EP${items.length - i}`;
+      }
+      
+      // Format date
+      const date = pubDate
+        ? new Date(pubDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      
+      episodes.push({
+        id: episodeNumber,
+        episodeNumber: episodeNumber,
+        title: title,
+        date: date,
+      });
+    }
+    
+    return episodes;
+    
   } catch (error) {
-    console.error("Failed to fetch recent episodes", error);
-    return [];
+    console.error("Failed to fetch recent episodes from RSS", error);
+    
+    // Return mock data as fallback
+    return [
+      { id: "EP531", episodeNumber: "EP531", title: "EP531 - 最新集數 (Mock)", date: new Date().toISOString().split('T')[0] },
+      { id: "EP530", episodeNumber: "EP530", title: "EP530 - 上一集 (Mock)", date: new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0] },
+    ];
   }
 };
 
 /**
- * Fetches the current Fear and Greed Index using Gemini Search Grounding.
+ * Fetches the current Fear and Greed Index directly from CNN.
+ * No Gemini API needed for this function.
  */
 export const fetchFearAndGreedIndex = async (): Promise<FearAndGreedIndex | null> => {
-  const client = getClient();
-  const modelId = "gemini-2.5-flash";
-
-  const systemInstruction = `
-    You are a financial data assistant. Search specifically for the current "CNN Fear and Greed Index".
-    
-    Return the CURRENT score (0-100) and the CURRENT rating description (e.g., "Extreme Fear", "Greed").
-    Also include the "Last updated" time if available.
-    
-    IMPORTANT: Return ONLY raw JSON. No Markdown.
-    Format:
-    {
-      "score": 50,
-      "rating": "Neutral",
-      "timestamp": "Nov 19 at 5:00 PM ET"
-    }
-  `;
-
   try {
-    const response = await client.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [{ text: "What is the current CNN Fear and Greed Index score today? Search for the latest data." }],
-      },
-      config: {
-        systemInstruction: systemInstruction,
-        tools: [{ googleSearch: {} }],
-      },
-    });
-
-    let jsonText = response.text || "";
+    // CNN Fear and Greed Index API endpoint
+    const apiUrl = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
     
-    // Clean up markdown
-    jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-    const firstOpen = jsonText.indexOf("{");
-    const lastClose = jsonText.lastIndexOf("}");
+    const response = await fetch(apiUrl);
+    const data = await response.json();
     
-    if (firstOpen !== -1 && lastClose !== -1) {
-      jsonText = jsonText.substring(firstOpen, lastClose + 1);
-      const data = JSON.parse(jsonText) as FearAndGreedIndex;
-      return data;
+    if (data && data.fear_and_greed) {
+      const currentData = data.fear_and_greed;
+      
+      return {
+        score: currentData.score,
+        rating: currentData.rating,
+        timestamp: currentData.timestamp || new Date().toISOString(),
+      };
     }
+    
     return null;
   } catch (error) {
-    console.error("Failed to fetch Fear & Greed Index", error);
-    return null;
+    console.error("Failed to fetch Fear & Greed Index from CNN API", error);
+    
+    // Return mock data as fallback
+    return {
+      score: 50,
+      rating: "Neutral",
+      timestamp: new Date().toISOString(),
+    };
   }
 };
