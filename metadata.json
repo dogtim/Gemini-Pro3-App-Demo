@@ -1,0 +1,5 @@
+{
+  "name": "Gooaye Podcast Analyst",
+  "description": "An AI-powered analyzer for the Gooaye (股癌) Podcast using Google Gemini. Summarizes episodes and extracts bullish/bearish company sentiments.",
+  "requestFramePermissions": []
+}
