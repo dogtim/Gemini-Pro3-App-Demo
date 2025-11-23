@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { EpisodeList } from './components/EpisodeList';
 import { AnalysisResult } from './components/AnalysisResult';
 import { MarketIndicators } from './components/MarketIndicators';
+import { PTTDashboard } from './components/PTTDashboard';
 import { Episode, PodcastAnalysis } from './types';
 import { analyzePodcast, fetchRecentEpisodes } from './services/geminiService';
 import { Loader2, UploadCloud, AlertCircle, Menu, X, Mic, BarChart3 } from 'lucide-react';
@@ -36,7 +37,7 @@ const App: React.FC = () => {
       // We pass the episode number and title to help Gemini find it on the web
       const query = `${episode.episodeNumber} ${episode.title}`;
       const result = await analyzePodcast(query);
-      
+
       if (result.data) {
         setAnalysisData(result.data);
         setSources(result.sources);
@@ -76,9 +77,9 @@ const App: React.FC = () => {
     }
 
     if (file.size > 25 * 1024 * 1024) {
-        if(!confirm("檔案較大 (>25MB)，可能會導致瀏覽器卡頓或記憶體不足。是否繼續？")) {
-            return;
-        }
+      if (!confirm("檔案較大 (>25MB)，可能會導致瀏覽器卡頓或記憶體不足。是否繼續？")) {
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -99,8 +100,8 @@ const App: React.FC = () => {
             setError("AI 無法解讀此音訊檔案。");
           }
         } catch (apiErr) {
-             console.error(apiErr);
-             setError("分析失敗。請確認檔案格式或長度是否支援。");
+          console.error(apiErr);
+          setError("分析失敗。請確認檔案格式或長度是否支援。");
         } finally {
           setIsLoading(false);
         }
@@ -131,32 +132,32 @@ const App: React.FC = () => {
 
   const renderPodcastView = () => (
     <div className="flex h-full w-full relative overflow-hidden">
-       {/* Mobile Menu Overlay */}
-       {mobileMenuOpen && (
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
         <div className="absolute inset-0 z-40 bg-slate-950/90 md:hidden" onClick={() => setMobileMenuOpen(false)} />
       )}
 
       {/* Sidebar */}
       <div className={`absolute z-50 h-full transition-transform duration-300 md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-         <EpisodeList 
-            episodes={episodes}
-            onSelectEpisode={handleSelectEpisode} 
-            selectedId={selectedEpisodeId}
-            onUploadClick={toggleUploadMode}
-            onRefreshClick={handleRefreshEpisodes}
-            isRefreshing={isRefreshingList}
-         />
+        <EpisodeList
+          episodes={episodes}
+          onSelectEpisode={handleSelectEpisode}
+          selectedId={selectedEpisodeId}
+          onUploadClick={toggleUploadMode}
+          onRefreshClick={handleRefreshEpisodes}
+          isRefreshing={isRefreshingList}
+        />
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full">
-        
+
         {/* Mobile Header for Sidebar Toggle */}
         <div className="md:hidden flex items-center p-4 border-b border-slate-800 bg-slate-900 flex-shrink-0">
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-slate-300">
-                {mobileMenuOpen ? <X /> : <Menu />}
-            </button>
-            <span className="ml-2 font-bold text-lg">股癌筆記</span>
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-slate-300">
+            {mobileMenuOpen ? <X /> : <Menu />}
+          </button>
+          <span className="ml-2 font-bold text-lg">股癌筆記</span>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
@@ -175,7 +176,7 @@ const App: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">發生錯誤</h3>
               <p className="text-slate-400 max-w-md">{error}</p>
-              <button 
+              <button
                 onClick={() => setError(null)}
                 className="mt-6 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white transition-colors"
               >
@@ -194,24 +195,24 @@ const App: React.FC = () => {
             </div>
           ) : uploadMode && !analysisData ? (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-               <div className="w-full max-w-xl p-10 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all group cursor-pointer relative">
-                  <input 
-                    type="file" 
-                    accept="audio/*" 
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                  <div className="flex flex-col items-center pointer-events-none">
-                    <div className="p-4 bg-slate-800 rounded-full mb-4 group-hover:scale-110 transition-transform">
-                        <UploadCloud className="text-blue-400" size={40} />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">上傳 Podcast 音檔</h3>
-                    <p className="text-slate-400 mb-4">支援 MP3, M4A, WAV</p>
-                    <p className="text-xs text-slate-600 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
-                       注意：瀏覽器內處理，建議檔案大小小於 25MB
-                    </p>
+              <div className="w-full max-w-xl p-10 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all group cursor-pointer relative">
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div className="flex flex-col items-center pointer-events-none">
+                  <div className="p-4 bg-slate-800 rounded-full mb-4 group-hover:scale-110 transition-transform">
+                    <UploadCloud className="text-blue-400" size={40} />
                   </div>
-               </div>
+                  <h3 className="text-xl font-bold text-white mb-2">上傳 Podcast 音檔</h3>
+                  <p className="text-slate-400 mb-4">支援 MP3, M4A, WAV</p>
+                  <p className="text-xs text-slate-600 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
+                    注意：瀏覽器內處理，建議檔案大小小於 25MB
+                  </p>
+                </div>
+              </div>
             </div>
           ) : analysisData ? (
             <AnalysisResult analysis={analysisData} sources={sources} />
@@ -223,37 +224,35 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
-       {/* Top Navigation Tabs */}
-       <div className="flex-shrink-0 bg-slate-950 border-b border-slate-800 flex items-center justify-center p-4 gap-6">
-          <button 
-            onClick={() => setActiveTab('podcast')}
-            className={`px-6 py-3 rounded-2xl flex items-center gap-2 transition-all duration-200 ${
-              activeTab === 'podcast' 
-                ? 'bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/20 transform scale-105' 
-                : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+      {/* Top Navigation Tabs */}
+      <div className="flex-shrink-0 bg-slate-950 border-b border-slate-800 flex items-center justify-center p-4 gap-6">
+        <button
+          onClick={() => setActiveTab('podcast')}
+          className={`px-6 py-3 rounded-2xl flex items-center gap-2 transition-all duration-200 ${activeTab === 'podcast'
+              ? 'bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/20 transform scale-105'
+              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
             }`}
-          >
-            <Mic size={20} />
-            <span className="font-bold">股癌 Podcast</span>
-          </button>
+        >
+          <Mic size={20} />
+          <span className="font-bold">股癌 Podcast</span>
+        </button>
 
-          <button 
-            onClick={() => setActiveTab('indicators')}
-            className={`px-6 py-3 rounded-2xl flex items-center gap-2 transition-all duration-200 ${
-              activeTab === 'indicators' 
-                ? 'bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/20 transform scale-105' 
-                : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+        <button
+          onClick={() => setActiveTab('indicators')}
+          className={`px-6 py-3 rounded-2xl flex items-center gap-2 transition-all duration-200 ${activeTab === 'indicators'
+              ? 'bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/20 transform scale-105'
+              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
             }`}
-          >
-            <BarChart3 size={20} />
-            <span className="font-bold">各項投資指標</span>
-          </button>
-       </div>
+        >
+          <BarChart3 size={20} />
+          <span className="font-bold">各項投資指標</span>
+        </button>
+      </div>
 
-       {/* Content Area */}
-       <div className="flex-1 overflow-hidden relative">
-          {activeTab === 'podcast' ? renderPodcastView() : <MarketIndicators />}
-       </div>
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden relative">
+        {activeTab === 'podcast' ? renderPodcastView() : <PTTDashboard />}
+      </div>
     </div>
   );
 };
